@@ -16,25 +16,33 @@ in the subject repo; a new major version is adopted by hand, by editing
 `subject.json`.
 
 ```
-css/hub.css               all styles of the hub
+css/hub.css               all styles of the hub (neutral default look)
 js/hub.js                 the hub: markup, sign-in screen, shelf, gear, icons
-img/icon.svg              browser favicon
-img/apple-touch-icon.png  180x180 home-screen icon for iOS
+img/icon.svg              neutral default favicon
+img/apple-touch-icon.png  neutral default 180x180 home-screen icon for iOS
 ```
+
+The template holds **no subject's own look**. Since 2.0.0 the sign-in screen
+and the icons of a subject (Habit, Emotion, ...) live in that subject's repo
+(see "Theme a subject" below).
 
 ## Use it in a subject repo
 
 `subject.json` names the UI version:
 
 ```json
-{ "title": "Habit", "templateTag": "3.2.4", "uiVersion": "1",
+{ "title": "Habit", "templateTag": "3.2.4", "uiVersion": "2",
+  "theme": { "css": "theme/gate.css", "icon": "theme/icon.svg",
+             "appleTouchIcon": "theme/apple-touch-icon.png" },
   "bookDetails": { "<book id>": { "authors": ["Name"], "edition": "2nd", "year": 2018 } } }
 ```
 
 - `title`: the heading. `templateTag`: the `recall-quiz-site-template` tag whose
   tools check the site. `bookDetails`: optional (authors, edition, year).
-- `uiVersion`: `"1"` (newest 1.x.x), `"1.2"` (newest 1.2.x) or `"1.2.3"`
-  (exactly that release). Use `"1"` normally; pin an exact one to stop updates.
+- `theme`: optional, see below.
+- `uiVersion`: `"2"` (newest 2.x.x), `"2.1"` (newest 2.1.x) or `"2.0.0"`
+  (exactly that release). Use the major normally; pin an exact one to stop
+  updates.
 
 The shell's `index.html` (it never changes) has this loader at the end of
 `<body>`; it adds the favicon and iOS icon itself through `js/hub.js`:
@@ -65,9 +73,48 @@ The shell's `index.html` (it never changes) has this loader at the end of
 </script>
 ```
 
-`hub.js` loads `css/hub.css` and the icons from the same version, then reads
-`subject.json` and `books.json` next to the page. `books.json` is written by
-the quiz template's `tools/site/build_hub.py`.
+`hub.js` loads `css/hub.css` (and, unless the theme names its own, the default
+icons) from the same version, then reads `subject.json` and `books.json` next to
+the page. `books.json` is written by the quiz template's
+`tools/site/build_hub.py`.
+
+## Theme a subject
+
+A subject gives its sign-in screen and icons their own look from **its own
+repo**; nothing about it is released here. All keys of `theme` are optional,
+and each is a plain relative path inside the subject's folder (no scheme, no
+leading `/`, no `..`; anything else is ignored):
+
+| key | what it is |
+|---|---|
+| `css` | a stylesheet loaded **after** `css/hub.css`, so it wins |
+| `icon` | browser favicon (`.svg`, `.png` or `.ico`) |
+| `appleTouchIcon` | iOS home-screen icon, a plain square 180x180 PNG |
+
+Without `theme`, a subject gets the neutral default look and icons. A missing
+or broken theme file never stops the page.
+
+A theme stylesheet usually only sets variables on `:root` and gives the empty
+art area a picture (a `url()` in the stylesheet is relative to that stylesheet,
+so keep the picture next to it):
+
+```css
+:root {
+  --gate-bg: #f6efe2;            /* page behind the sign-in screen */
+  --gate-fg: #23303a;            /* title, text, outlines, focus ring */
+  --gate-muted: #4d5a62;         /* the short lines of text */
+  --gate-button-bg: #23303a;     /* the main (Sign in) button */
+  --gate-button-fg: #f6efe2;
+  --gate-heading-font: "Fraunces", Georgia, serif;
+  --gate-focus: #d9654f;         /* optional, default = --gate-fg */
+}
+#gate .gate-art { background: url("contours.svg") center / cover no-repeat; }
+```
+
+Web fonts: put an `@import url("https://fonts.googleapis.com/...")` first in
+the theme stylesheet. Keep the text readable: `--gate-fg` and `--gate-muted`
+on `--gate-bg`, and `--gate-button-fg` on `--gate-button-bg`, need strong
+contrast. Themes hold no book content.
 
 ## Other templates this UI uses
 
@@ -93,8 +140,14 @@ theme, light, at 16px; a reader's own gear choices win.
   backward compatible**: a subject repo's `index.html`, `subject.json`,
   `books.json` and book folders keep working unchanged.
 - major (`2.0.0`): anything that breaks them (a renamed `subject.json` key, a
-  new required file, a changed book folder format). Subject repos move to it
-  by hand: set `"uiVersion": "2"` in their `subject.json`.
+  new required file, a changed book folder format, a changed default look).
+  Subject repos move to it by hand: set `"uiVersion": "2"` in their
+  `subject.json`.
+- **2.0.0** (breaking): the template no longer ships Habit's teal sign-in
+  screen and icons. The default sign-in screen is neutral, and a subject gives
+  itself its look with `theme` in `subject.json`. A subject that moves to
+  `"2"` without a theme gets the neutral look, so Habit adds its theme first
+  (its old look is in its own repo).
 - A tag is immutable. A bad release is fixed with a newer patch tag, never by
   moving a tag.
 
