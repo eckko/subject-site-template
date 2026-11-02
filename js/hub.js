@@ -1,0 +1,722 @@
+/*
+ * hub.js: the whole UI of a subject site's hub page (the shelf).
+ *
+ * Source of truth: https://github.com/eckko/subject-site-template. A subject
+ * repo (made from eckko/subject-reader-shell) has an index.html that only
+ * loads this file from jsDelivr by an exact tag:
+ *   https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1.0.0/js/hub.js
+ * Everything else comes from here too: css/hub.css and the icons in img/.
+ * Subject repos hold encrypted data only; change the UI in this repo and
+ * release a new tag.
+ *
+ * What it does: nothing is shown until the reader has signed in (js/unlock.js
+ * from the quiz template gets the subject key, the same way the book pages
+ * do). After that it lists the books in the subject's books.json with their
+ * covers, which are encrypted like everything else: each book's
+ * data/manifest.enc names the cover and media/<id>_front_cover.enc is
+ * decrypted in the browser. A book without a cover gets a typographic tile.
+ * The reader can search, filter, sort and switch between cards, a list and a
+ * compact list. Progress is read from this browser's saved quiz progress
+ * (recall-quiz:<book id>). The round gear at the bottom right is the quiz
+ * template's reading panel (theme, font, size...) plus "Sign out".
+ *
+ * Reads, next to the page: subject.json (title, bookDetails) and books.json
+ * (written by the quiz template's tools/site/build_hub.py). No book content
+ * lives in this file.
+ */
+(function subjectSiteUi() {
+  "use strict";
+
+  /* The quiz template that provides sign-in, the gear and themes. */
+  var QUIZ_TEMPLATE_TAG = "3.2.4";
+  var QUIZ_CDN = "https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@" +
+    QUIZ_TEMPLATE_TAG + "/";
+
+  /* Where this file was loaded from (the same tag of this repo). */
+  var script = document.currentScript;
+  var UI_BASE = script && script.src ?
+    script.src.replace(/js\/hub\.js(\?.*)?$/, "") : "";
+
+  /** The hub's markup: the sign-in screen and the shelf. */
+  var MARKUP = [
+    "<section id=\"gate\" aria-label=\"Sign in\">",
+    "  <div class=\"gate-art\">",
+    "    <svg aria-hidden=\"true\" viewBox=\"0 0 180 180\"><defs><linearGradient id=\"gateIcon\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#2a8a82\"/><stop offset=\"1\" stop-color=\"#2f4a8f\"/></linearGradient></defs><rect width=\"180\" height=\"180\" rx=\"40\" fill=\"url(#gateIcon)\"/><g fill=\"none\" stroke=\"#fff\" stroke-width=\"7\" stroke-linecap=\"round\" opacity=\".9\"><path d=\"M31.7 68.8A62 62 0 0 1 148.3 68.8\"/><path d=\"M148.3 111.2A62 62 0 0 1 31.7 111.2\"/></g><path d=\"M90 74C80 68 66 67 54 71V108C66 104 80 105 90 111z\" fill=\"#fff\"/><path d=\"M90 74C100 68 114 67 126 71V108C114 104 100 105 90 111z\" fill=\"#e3f0ee\"/></svg>",
+    "  </div>",
+    "  <div class=\"gate-body\">",
+    "    <h1 id=\"gateTitle\">Books</h1>",
+    "    <p class=\"gate-line\">Sign in to open your books. Your account holds the key that unlocks them.</p>",
+    "    <div id=\"lockslot\"><p class=\"gate-line\" id=\"gateWait\" role=\"status\">Checking sign-in…</p></div>",
+    "  </div>",
+    "</section>",
+    "",
+    "<main id=\"app\" hidden>",
+    "  <header class=\"top\">",
+    "    <h1 id=\"heading\">Books</h1>",
+    "    <p class=\"count\" id=\"count\" aria-live=\"polite\">Checking sign-in…</p>",
+    "",
+    "    <p class=\"status\" id=\"status\" role=\"status\">Sign in to see your books.</p>",
+    "",
+    "    <div class=\"controls\" id=\"controls\" hidden>",
+    "      <div class=\"row\">",
+    "        <div class=\"search\">",
+    "          <svg aria-hidden=\"true\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"7\"></circle><path d=\"M20 20l-3.5-3.5\"></path></svg>",
+    "          <input id=\"query\" type=\"search\" placeholder=\"Search books\" aria-label=\"Search books\" autocomplete=\"off\">",
+    "        </div>",
+    "        <div class=\"seg\" id=\"views\" role=\"group\" aria-label=\"Layout\">",
+    "          <button type=\"button\" data-view=\"cards\" aria-label=\"Cards\" aria-pressed=\"true\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"></rect><rect x=\"13\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"></rect><rect x=\"4\" y=\"13\" width=\"7\" height=\"7\" rx=\"1.5\"></rect><rect x=\"13\" y=\"13\" width=\"7\" height=\"7\" rx=\"1.5\"></rect></svg></button>",
+    "          <button type=\"button\" data-view=\"list\" aria-label=\"List\" aria-pressed=\"false\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"4\" y=\"5\" width=\"4\" height=\"5\" rx=\"1\"></rect><rect x=\"4\" y=\"14\" width=\"4\" height=\"5\" rx=\"1\"></rect><path d=\"M11 7.5h9M11 16.5h9\"></path></svg></button>",
+    "          <button type=\"button\" data-view=\"compact\" aria-label=\"Compact\" aria-pressed=\"false\"><svg aria-hidden=\"true\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M5 7h14M5 12h14M5 17h14\"></path></svg></button>",
+    "        </div>",
+    "      </div>",
+    "      <div class=\"chips\" id=\"chips\"></div>",
+    "    </div>",
+    "  </header>",
+    "",
+    "  <div id=\"shelf\" hidden>",
+    "    <div id=\"books\"></div>",
+    "  </div>",
+    "</main>"
+  ].join("\n");
+
+  function showHub() {
+    "use strict";
+
+    /* The quiz template (reading panel, sign-in, themes), by one exact tag
+       (never a branch). Change it here, in this repo, and release a new tag. */
+    var CDN = QUIZ_CDN;
+    var UI_KEY = "recall-hub:ui";
+    var OPENED_KEY = "recall-hub:opened:";
+    var PROGRESS_KEY = "recall-quiz:";
+    var SHARED_SCRIPTS = ["js/default-settings.js", "js/themes-list.js",
+      "js/theme-picker.js", "js/helpers.js", "js/reading-settings.js",
+      "js/reading-panel.js"];
+    var TILE_COLOURS = ["#2f4a8f", "#1f5f5b", "#8a3b2a", "#5b3f8c",
+      "#8f5214", "#3d5a2a", "#7a2e55", "#2b3a4a"];
+    var FILTERS = [["all", "All"], ["going", "In progress"],
+      ["new", "Not started"], ["done", "Done"]];
+    var SORTS = [["az", "A–Z"], ["recent", "Recent"],
+      ["progress", "Progress"], ["size", "Size"]];
+
+    var gate = document.getElementById("gate");
+    var gateTitle = document.getElementById("gateTitle");
+    var lockSlot = document.getElementById("lockslot");
+    var app = document.getElementById("app");
+    var heading = document.getElementById("heading");
+    var count = document.getElementById("count");
+    var status = document.getElementById("status");
+    var shelf = document.getElementById("shelf");
+    var chipsBox = document.getElementById("chips");
+    var listBox = document.getElementById("books");
+    var queryBox = document.getElementById("query");
+    var viewButtons = document.querySelectorAll("#views button");
+
+    var books = [];                    // books.json entries plus what we learn
+    var ui = loadUi();
+    var key = null;                    // CryptoKey once signed in
+
+    // ---------------------------------------------------------- helpers
+
+    /** @returns {{view: string, sort: string, filter: string}} */
+    function loadUi() {
+      var saved = {};
+      try {
+        saved = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
+      } catch (problem) {
+        saved = {};
+      }
+      return {
+        view: ["cards", "list", "compact"].indexOf(saved.view) !== -1 ? saved.view : "cards",
+        sort: SORTS.some(function has(s) { return s[0] === saved.sort; }) ? saved.sort : "az",
+        filter: FILTERS.some(function has(f) { return f[0] === saved.filter; }) ? saved.filter : "all",
+        query: "",
+      };
+    }
+
+    /** Remember layout, sort and filter on this device. */
+    function saveUi() {
+      try {
+        localStorage.setItem(UI_KEY, JSON.stringify({
+          view: ui.view, sort: ui.sort, filter: ui.filter }));
+      } catch (problem) {
+        // storage blocked: the choice lasts until the page closes
+      }
+    }
+
+    /**
+     * @param {string} tag  element name
+     * @param {string} [className]
+     * @param {string} [text]
+     * @returns {HTMLElement}
+     */
+    function make(tag, className, text) {
+      var element = document.createElement(tag);
+      if (className) {
+        element.className = className;
+      }
+      if (text !== undefined) {
+        element.textContent = text;
+      }
+      return element;
+    }
+
+    /** @param {string} file  @returns {Promise<object>} parsed JSON */
+    function loadJson(file) {
+      return fetch(file, { cache: "no-cache" }).then(function read(reply) {
+        if (!reply.ok) {
+          throw new Error(file + ": HTTP " + reply.status);
+        }
+        return reply.json();
+      });
+    }
+
+    /**
+     * @param {string} address
+     * @returns {Promise} resolves when the classic script has run
+     */
+    function addScript(address) {
+      return new Promise(function add(resolve, reject) {
+        var script = document.createElement("script");
+        script.src = address;
+        script.onload = resolve;
+        script.onerror = function failed() {
+          reject(new Error("could not load " + address));
+        };
+        document.head.appendChild(script);
+      });
+    }
+
+    /** @param {string} address  adds a stylesheet link */
+    function addStyle(address) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = address;
+      document.head.appendChild(link);
+    }
+
+    /** @param {Uint8Array} bytes  @returns {string} an image type */
+    function sniff(bytes) {
+      if (bytes[0] === 0x89 && bytes[1] === 0x50) { return "image/png"; }
+      if (bytes[0] === 0xff && bytes[1] === 0xd8) { return "image/jpeg"; }
+      if (bytes[0] === 0x47 && bytes[1] === 0x49) { return "image/gif"; }
+      if (bytes[0] === 0x52 && bytes[1] === 0x49) { return "image/webp"; }
+      return "image/svg+xml";
+    }
+
+    /**
+     * @param {number} when  a time in ms
+     * @returns {string} "today", "yesterday", "3 days ago", ...
+     */
+    function ago(when) {
+      var days = Math.floor((Date.now() - when) / 86400000);
+      if (days <= 0) { return "today"; }
+      if (days === 1) { return "yesterday"; }
+      return days + " days ago";
+    }
+
+    /** @param {object} book  @returns {string} "A, B" or "" */
+    function authorsText(book) {
+      var authors = book.authors;
+      return Array.isArray(authors) ? authors.join(", ") : (authors || "");
+    }
+
+    /**
+     * @param {object} book
+     * @returns {string} "Author(s) \u00b7 edition \u00b7 year", whatever is known
+     */
+    function byline(book) {
+      return [authorsText(book), book.edition || "", book.year || ""]
+        .filter(Boolean).join(" \u00b7 ");
+    }
+
+    /** @param {string} title  @returns {string} a sort key without The/A */
+    function sortKey(title) {
+      return title.replace(/^(the|a)\s+/i, "").toLowerCase();
+    }
+
+    // ---------------------------------------------------- what we know
+
+    /**
+     * Read this browser's saved quiz progress for one book.
+     * @param {object} book
+     */
+    function readProgress(book) {
+      var answered = 0;
+      var last = 0;
+      try {
+        var saved = JSON.parse(localStorage.getItem(PROGRESS_KEY + book.id) || "{}");
+        Object.keys(saved.questions || {}).forEach(function each(id) {
+          var record = saved.questions[id];
+          if (record && record.timesSeen > 0) {
+            answered += 1;
+            last = Math.max(last, record.lastAnswered || 0);
+          }
+        });
+      } catch (problem) {
+        answered = 0;
+      }
+      var opened = 0;
+      try {
+        opened = Number(localStorage.getItem(OPENED_KEY + book.id)) || 0;
+      } catch (problem) {
+        opened = 0;
+      }
+      book.answered = answered;
+      book.lastTouched = Math.max(last, opened);
+    }
+
+    /** @param {object} book  @returns {number} percent answered, 0 to 100 */
+    function percent(book) {
+      if (!book.questions) {
+        return 0;
+      }
+      return Math.min(100, Math.round(100 * book.answered / book.questions));
+    }
+
+    /** @param {object} book  @returns {string} the status line */
+    function statusText(book) {
+      var pct = book.questions ? 100 * book.answered / book.questions : 0;
+      if (!book.answered) {
+        return "Not started";
+      }
+      var when = book.lastTouched ? " · " + ago(book.lastTouched) : "";
+      var label = pct >= 100 ? "All answered" :
+        pct < 1 ? book.answered + " answered" : pct + "% answered";
+      return label + when;
+    }
+
+    /**
+     * Decrypt one RQE1 file of this subject.
+     * @param {string} path
+     * @returns {Promise<Uint8Array>}
+     */
+    function fetchPlain(path) {
+      return fetch(path).then(function check(reply) {
+        if (!reply.ok) {
+          throw new Error(path + ": HTTP " + reply.status);
+        }
+        return reply.arrayBuffer();
+      }).then(function open(buffer) {
+        return window.SubjectUnlock.decrypt(buffer, key);
+      });
+    }
+
+    /**
+     * Load a book's manifest (summary, counts, cover) and its cover, then
+     * redraw. A failure just leaves the book as a typographic tile.
+     * @param {object} book
+     */
+    function learnBook(book) {
+      var folder = encodeURIComponent(book.folder);
+      fetchPlain(folder + "/data/manifest.enc").then(function got(bytes) {
+        var manifest = JSON.parse(new TextDecoder().decode(bytes));
+        book.summary = (manifest.book && manifest.book.summary) || "";
+        book.chapters = (manifest.chapters || []).length;
+        book.questions = (manifest.chapters || []).reduce(function add(sum, chapter) {
+          return sum + (chapter.questions || 0);
+        }, 0);
+        book.ideas = (manifest.chapters || []).reduce(function add(sum, chapter) {
+          return sum + (chapter.ideas || 0);
+        }, 0);
+        draw();
+        var cover = manifest.book && manifest.book.cover;
+        if (!cover) {
+          return null;
+        }
+        return fetchPlain(folder + "/media/" + cover.replace(/\//g, "_") + ".enc")
+          .then(function image(plain) {
+            book.coverUrl = URL.createObjectURL(
+              new Blob([plain], { type: sniff(plain) }));
+            draw();
+          });
+      }).catch(function ignore() {
+        // locked or missing: the tile stays
+      });
+    }
+
+    // ------------------------------------------------------------ views
+
+    /**
+     * @param {object} book
+     * @param {string} label
+     * @param {string} view  "read" or "quiz"
+     * @param {boolean} primary
+     * @returns {HTMLElement} a link, or a greyed-out label when the book has
+     *   no such view
+     */
+    function makeAction(book, label, view, primary) {
+      var has = (book.views || []).indexOf(view) !== -1;
+      var action = make(has ? "a" : "span", "action" + (primary ? " primary" : ""), label);
+      if (has) {
+        action.href = encodeURIComponent(book.folder) + "/index.html?view=" + view;
+        action.addEventListener("click", function remember() {
+          try {
+            localStorage.setItem(OPENED_KEY + book.id, String(Date.now()));
+          } catch (problem) {
+            // not stored
+          }
+        });
+        action.setAttribute("aria-label", label + ": " + book.title);
+      } else {
+        action.setAttribute("aria-disabled", "true");
+        action.title = "Not available for this book yet";
+      }
+      return action;
+    }
+
+    /**
+     * The cover picture, or a typographic tile in the book's colour.
+     * @param {object} book
+     * @param {boolean} titleIsHeading  the tile's title is the book's h2
+     * @returns {HTMLElement}
+     */
+    function makeArt(book, titleIsHeading) {
+      var art = make("div", "art");
+      art.style.background = book.colour;
+      if (book.coverUrl) {
+        art.style.background = "var(--color-border, #d5dbe5)";
+        var image = make("img", "cover-img");
+        image.src = book.coverUrl;
+        image.alt = "Cover of " + book.title;
+        art.appendChild(image);
+        return art;
+      }
+      var tile = make("div", "cover");
+      tile.style.background = book.colour;
+      tile.appendChild(make(titleIsHeading ? "h2" : "p", "t", book.short));
+      var line = authorsText(book) || (book.chapters ? book.chapters + " chapters" : "");
+      if (line) {
+        tile.appendChild(make("div", "m", line));
+      }
+      art.appendChild(tile);
+      return art;
+    }
+
+    /** @param {object} book  @returns {HTMLElement} the progress bar */
+    function makeBar(book) {
+      var bar = make("div", "bar" + (percent(book) >= 100 ? " done" : ""));
+      var fill = make("i");
+      fill.style.width = percent(book) + "%";
+      bar.appendChild(fill);
+      bar.setAttribute("role", "progressbar");
+      bar.setAttribute("aria-valuemin", "0");
+      bar.setAttribute("aria-valuemax", "100");
+      bar.setAttribute("aria-valuenow", String(percent(book)));
+      bar.setAttribute("aria-label", "Answered");
+      return bar;
+    }
+
+    /** @param {object} book  @returns {HTMLElement} one card */
+    function makeCard(book) {
+      var item = make("li", "book");
+      item.appendChild(makeArt(book, true));
+      if (book.coverUrl) {
+        item.appendChild(make("h2", "sr-only", book.title));
+      }
+      var meta = make("div", "meta");
+      meta.appendChild(makeBar(book));
+      meta.appendChild(make("p", "small", statusText(book)));
+      var actions = make("div", "actions");
+      actions.appendChild(makeAction(book, "Read", "read", true));
+      actions.appendChild(makeAction(book, "Test", "quiz", false));
+      meta.appendChild(actions);
+      item.appendChild(meta);
+      return item;
+    }
+
+    /** @param {object} book  @returns {HTMLElement} one list row */
+    function makeRow(book) {
+      var item = make("li", "book listrow");
+      item.appendChild(makeArt(book, false));
+      var body = make("div", "body");
+      body.appendChild(make("h2", null, book.title));
+      if (byline(book)) {
+        body.appendChild(make("p", "byline", byline(book)));
+      }
+      body.appendChild(makeBar(book));
+      var facts = [statusText(book)];
+      if (book.chapters) {
+        facts.push(book.chapters + " chapters", book.ideas + " ideas",
+          book.questions + " questions");
+      }
+      body.appendChild(make("p", "small", facts.join(" · ")));
+      var actions = make("div", "actions");
+      actions.appendChild(makeAction(book, "Read book", "read", true));
+      actions.appendChild(makeAction(book, "Test only", "quiz", false));
+      body.appendChild(actions);
+      item.appendChild(body);
+      return item;
+    }
+
+    /** @param {object} book  @returns {HTMLElement} one compact row */
+    function makeCompact(book) {
+      var item = make("li", "crow");
+      var dot = make("span", "dot");
+      dot.style.background = book.colour;
+      dot.setAttribute("aria-hidden", "true");
+      var text = make("div", "text");
+      text.appendChild(make("h2", null, book.title));
+      text.appendChild(make("p", "small", statusText(book)));
+      item.appendChild(dot);
+      item.appendChild(text);
+      item.appendChild(makeCompactLink(book, "Read", "read"));
+      item.appendChild(makeCompactLink(book, "Test", "quiz"));
+      return item;
+    }
+
+    /**
+     * @param {object} book
+     * @param {string} label
+     * @param {string} view
+     * @returns {HTMLElement}
+     */
+    function makeCompactLink(book, label, view) {
+      var link = makeAction(book, label, view, false);
+      link.className = "";
+      return link;
+    }
+
+    // ------------------------------------------------------ the list
+
+    /** @returns {object[]} the books to show, filtered and sorted */
+    function visibleBooks() {
+      var query = ui.query.trim().toLowerCase();
+      var shown = books.filter(function keep(book) {
+        var pct = percent(book);
+        var matches = !query || (book.title + " " + authorsText(book) + " " + (book.summary || "")).toLowerCase().indexOf(query) !== -1;
+        var state = ui.filter === "all" ||
+          (ui.filter === "new" && !book.answered) ||
+          (ui.filter === "going" && book.answered && pct < 100) ||
+          (ui.filter === "done" && pct >= 100);
+        return matches && state;
+      });
+      var order = {
+        az: function az(a, b) { return sortKey(a.title).localeCompare(sortKey(b.title)); },
+        recent: function recent(a, b) {
+          return b.lastTouched - a.lastTouched || order.az(a, b);
+        },
+        progress: function progress(a, b) { return percent(b) - percent(a) || order.az(a, b); },
+        size: function size(a, b) { return (b.questions || 0) - (a.questions || 0) || order.az(a, b); },
+      };
+      return shown.sort(order[ui.sort]);
+    }
+
+    /** Draw the chips, the counts and the list for the current state. */
+    function draw() {
+      books.forEach(readProgress);
+      drawChips();
+      viewButtons.forEach(function mark(button) {
+        button.setAttribute("aria-pressed", String(button.getAttribute("data-view") === ui.view));
+      });
+      var shown = visibleBooks();
+      var going = books.filter(function started(book) {
+        return book.answered && percent(book) < 100;
+      }).length;
+      count.textContent = shown.length === books.length ?
+        books.length + (books.length === 1 ? " book" : " books") +
+          (going ? " · " + going + " in progress" : "") :
+        shown.length + " of " + books.length + " books";
+      listBox.textContent = "";
+      if (!shown.length) {
+        var empty = make("div", "empty");
+        empty.appendChild(make("p", null, books.length ? "No books match." : "No books yet."));
+        if (books.length) {
+          var clear = make("button", null, "Clear search and filters");
+          clear.type = "button";
+          clear.addEventListener("click", function reset() {
+            ui.query = "";
+            ui.filter = "all";
+            queryBox.value = "";
+            saveUi();
+            draw();
+          });
+          empty.appendChild(clear);
+        }
+        listBox.appendChild(empty);
+        return;
+      }
+      var list = make("ul", "books " + (ui.view === "cards" ? "grid" :
+        ui.view === "list" ? "stack" : "compact"));
+      var build = ui.view === "cards" ? makeCard : ui.view === "list" ? makeRow : makeCompact;
+      shown.forEach(function add(book) {
+        list.appendChild(build(book));
+      });
+      listBox.appendChild(list);
+    }
+
+    /** Draw the sort chips first, then (scrolling right) the filters. */
+    function drawChips() {
+      chipsBox.textContent = "";
+      chipsBox.appendChild(make("span", "label", "Sort"));
+      SORTS.forEach(function add(sort) {
+        chipsBox.appendChild(makeChip(sort[1], ui.sort === sort[0], "chip sort", function pick() {
+          ui.sort = sort[0];
+          saveUi();
+          draw();
+        }));
+      });
+      chipsBox.appendChild(make("span", "divider"));
+      chipsBox.appendChild(make("span", "label", "Show"));
+      FILTERS.forEach(function add(filter) {
+        chipsBox.appendChild(makeChip(filter[1], ui.filter === filter[0], "chip", function pick() {
+          ui.filter = filter[0];
+          saveUi();
+          draw();
+        }));
+      });
+    }
+
+    /**
+     * @param {string} label
+     * @param {boolean} on
+     * @param {string} className
+     * @param {function(): void} onPick
+     * @returns {HTMLElement}
+     */
+    function makeChip(label, on, className, onPick) {
+      var chip = make("button", className, label);
+      chip.type = "button";
+      chip.setAttribute("aria-pressed", String(on));
+      chip.addEventListener("click", onPick);
+      return chip;
+    }
+
+    // ------------------------------------------------------------ start
+
+    queryBox.addEventListener("input", function search() {
+      ui.query = queryBox.value;
+      draw();
+    });
+    viewButtons.forEach(function wire(button) {
+      button.addEventListener("click", function pick() {
+        ui.view = button.getAttribute("data-view");
+        saveUi();
+        draw();
+      });
+    });
+
+    /** The gear: the template's reading panel, plus Sign out. */
+    function setUpGear() {
+      window.RecallQuizAssetBase = CDN;
+      /* Start light, in the Classic theme (a reader's own choice wins). */
+      window.RecallQuizBookDefaults = { theme: { id: "classic", mode: "light" } };
+      return SHARED_SCRIPTS.reduce(function chain(done, file) {
+        return done.then(function next() { return addScript(CDN + file); });
+      }, Promise.resolve()).then(function ready() {
+        window.RecallQuiz.reading.configure({ fontSize: 16, font: "theme" });
+        window.RecallQuiz.reading.useBook("subject-hub");
+        window.RecallQuizTheme.useBook("subject-hub");
+        window.RecallQuiz.readingPanel.create({
+          homeLabel: "Sign out",
+          onHome: function signOut() { window.SubjectUnlock.reset(); },
+          subjectPageAddress: null,
+          addSections: null,
+          onReset: function noop() {},
+        });
+        showSignOut(false);
+      });
+    }
+
+    /** @param {boolean} on  show or hide the gear's Sign out button */
+    function showSignOut(on) {
+      var buttons = document.querySelectorAll("#reading-panel button");
+      for (var i = 0; i < buttons.length; i += 1) {
+        if (buttons[i].textContent === "Sign out") { buttons[i].hidden = !on; }
+      }
+    }
+
+    /**
+     * @param {object} subject  subject.json
+     * @param {object} index    books.json
+     */
+    function start(subject, index) {
+      if (subject.title) {
+        heading.textContent = subject.title;
+        document.title = subject.title;
+      }
+      books = (index.books || []).map(function prepare(book, number) {
+        return Object.assign({
+          short: book.title.split(":")[0],
+          colour: TILE_COLOURS[number % TILE_COLOURS.length],
+          answered: 0, lastTouched: 0, questions: 0, ideas: 0, chapters: 0,
+          summary: "", coverUrl: "",
+        }, book, (subject.bookDetails || {})[book.id] || {});
+      });
+      status.hidden = true;
+      shelf.hidden = false;
+      document.getElementById("controls").hidden = false;
+      draw();
+      books.forEach(learnBook);
+    }
+
+    /* Move the template's lock box into the sign-in screen. */
+    var watcher = new MutationObserver(function moveLock() {
+      var box = document.getElementById("unlock");
+      if (!box || box.parentNode === lockSlot) { return; }
+      var wait = document.getElementById("gateWait");
+      if (wait) { wait.remove(); }
+      var note = box.querySelector(".note");
+      if (note && /^This book is encrypted/.test(note.textContent)) {
+        note.textContent = "";
+        note.hidden = true;
+      }
+      lockSlot.appendChild(box);
+    });
+    watcher.observe(document.body, { childList: true });
+
+    addStyle(CDN + "css/theme-defaults.css");
+    addStyle(CDN + "css/reading-panel.css");
+    var files = Promise.all([loadJson("subject.json"), loadJson("books.json")]);
+    files.catch(function ignore() { /* reported below */ });
+    loadJson("subject.json").then(function early(subject) {
+      if (subject.title) {
+        gateTitle.textContent = subject.title;
+        document.title = subject.title;
+      }
+    }).catch(function ignore() { /* the title stays "Books" */ });
+    /* The gear works on the sign-in screen too; Sign out only after. */
+    var gearReady = setUpGear();
+    gearReady.catch(function ignore() { /* reported below */ });
+    addScript(CDN + "js/unlock.js")
+      .then(function unlock() { return window.SubjectUnlock.ready(); })
+      .then(function signedIn(result) {
+        key = result.key;
+        status.textContent = "Loading your books…";
+        gate.hidden = true;
+        app.hidden = false;
+        showSignOut(true);
+        return Promise.all([files, gearReady]);
+      })
+      .then(function show(done) { start(done[0][0], done[0][1]); })
+      .catch(function failed(problem) {
+        gate.hidden = true;
+        app.hidden = false;
+        status.hidden = false;
+        count.textContent = "";
+        status.textContent = "Could not start: " + problem.message +
+          " (open this page through a web server, not from a folder).";
+      });
+  }
+
+  /** Put the markup on the page, then start. */
+  function boot() {
+    document.body.insertAdjacentHTML("afterbegin", MARKUP);
+    showHub();
+  }
+
+  /** Load the stylesheet first so the page never shows unstyled. */
+  function start() {
+    var link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = UI_BASE + "css/hub.css";
+    link.addEventListener("load", boot);
+    link.addEventListener("error", boot);
+    document.head.appendChild(link);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
