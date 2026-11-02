@@ -2,10 +2,12 @@
  * hub.js: the whole UI of a subject site's hub page (the shelf).
  *
  * Source of truth: https://github.com/eckko/subject-site-template. A subject
- * repo (made from eckko/subject-reader-shell) has an index.html that only
- * loads this file from jsDelivr by an exact tag:
- *   https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1.0.0/js/hub.js
- * Everything else comes from here too: css/hub.css and the icons in img/.
+ * repo (made from eckko/subject-reader-shell) has an index.html with a tiny
+ * loader that reads "uiVersion" from the subject's subject.json (for example
+ * "1" = the newest 1.x.x) and loads this file from jsDelivr:
+ *   https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1/js/hub.js
+ * Everything else comes from here too: css/hub.css and the icons in img/
+ * (added to the page by this file, from the same version).
  * Subject repos hold encrypted data only; change the UI in this repo and
  * release a new tag.
  *
@@ -704,8 +706,23 @@
     showHub();
   }
 
+  /** Add the favicon and the iOS home-screen icon (served from this repo). */
+  function addIcons() {
+    [["icon", "image/svg+xml", "", "img/icon.svg"],
+     ["apple-touch-icon", "", "180x180", "img/apple-touch-icon.png"]
+    ].forEach(function add(spec) {
+      var icon = document.createElement("link");
+      icon.rel = spec[0];
+      if (spec[1]) { icon.type = spec[1]; }
+      if (spec[2]) { icon.setAttribute("sizes", spec[2]); }
+      icon.href = UI_BASE + spec[3];
+      document.head.appendChild(icon);
+    });
+  }
+
   /** Load the stylesheet first so the page never shows unstyled. */
   function start() {
+    addIcons();
     var link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = UI_BASE + "css/hub.css";
