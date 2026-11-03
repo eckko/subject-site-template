@@ -132,27 +132,29 @@ img.cover-img { display: block; width: 100%; height: 100%; object-fit: contain; 
   background: var(--color-card, #fbfcfd); border: 2px solid var(--color-accent, #2743d6); border-radius: var(--radius-small, .75rem); font-weight: 600; }
 
 /* Sign-in screen: shown until the subject key is known. The template's
-   lock box (#unlock) is moved into #lockslot and restyled here. */
+   lock box (#unlock) is moved into #lockslot and restyled here.
+   The default look is neutral. A subject gives it its own look from its own
+   repo (subject.json "theme": { "css": ... }, loaded after this file): most
+   themes only set these variables on :root --
+     --gate-bg --gate-fg --gate-muted --gate-focus
+     --gate-button-bg --gate-button-fg --gate-heading-font
+   -- and give .gate-art (empty here, 14rem or taller) a background image. */
 #gate { position: fixed; inset: 0; z-index: 5; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column;
-  background: #164a47; color: #fff; }
+  background: var(--gate-bg, #1f2933); color: var(--gate-fg, #fff); }
 #gate[hidden] { display: none; }
-#gate .gate-art { flex: 1 0 auto; min-height: 14rem; display: flex; align-items: center; justify-content: center; position: relative; }
-#gate .gate-art::before, #gate .gate-art::after { content: ""; position: absolute; border-radius: 50%; }
-#gate .gate-art::before { width: 22rem; height: 22rem; background: #1d5c58; left: -5rem; top: 1rem; }
-#gate .gate-art::after { width: 14rem; height: 14rem; background: #226a65; right: -3rem; top: 8rem; }
-#gate .gate-art svg { position: relative; z-index: 1; width: 8rem; height: 8rem; }
+#gate .gate-art { flex: 1 0 auto; min-height: 14rem; position: relative; }
 #gate .gate-body { position: relative; z-index: 1; width: 100%; max-width: 28rem; margin: 0 auto; box-sizing: border-box; padding: 0 1.5rem 6rem; display: flex; flex-direction: column; gap: .9rem; }
-#gate h1 { margin: 0; color: #fff; font: 600 2.75rem / 1.05 var(--font-heading, Georgia, serif); }
-#gate .gate-line { margin: 0; font-size: 1rem; line-height: 1.45; color: #d4e6e3; }
-#gate #unlock { max-width: none; margin: 0; padding: 0; font: inherit; color: #fff; }
+#gate h1 { margin: 0; color: var(--gate-fg, #fff); font: 600 2.75rem / 1.05 var(--gate-heading-font, var(--font-heading, Georgia, serif)); }
+#gate .gate-line { margin: 0; font-size: 1rem; line-height: 1.45; color: var(--gate-muted, #cbd2d9); }
+#gate #unlock { max-width: none; margin: 0; padding: 0; font: inherit; color: var(--gate-fg, #fff); }
 #gate #unlock h1 { display: none; }
-#gate #unlock .note { margin: 0 0 .75rem; color: #d4e6e3; }
+#gate #unlock .note { margin: 0 0 .75rem; color: var(--gate-muted, #cbd2d9); }
 #gate #unlock .row { margin: 0; flex-direction: column; align-items: stretch; }
-#gate #unlock button { min-height: 44px; border-radius: .875rem; border: 2px solid #fff; background: transparent; color: #fff; font-weight: 600; }
-#gate #unlock .go { min-height: 54px; border: 0; background: #fff; color: #0f2f2d; font-size: 1rem; }
+#gate #unlock button { min-height: 44px; border-radius: .875rem; border: 2px solid var(--gate-fg, #fff); background: transparent; color: var(--gate-fg, #fff); font-weight: 600; }
+#gate #unlock .go { min-height: 54px; border: 0; background: var(--gate-button-bg, #fff); color: var(--gate-button-fg, #1f2933); font-size: 1rem; }
 #gate #unlock .go:disabled { opacity: .7; }
-#gate #unlock summary { min-height: 44px; display: flex; align-items: center; color: #fff; font-weight: 500; font-size: .9rem; text-decoration: underline; text-underline-offset: 3px; }
+#gate #unlock summary { min-height: 44px; display: flex; align-items: center; color: var(--gate-fg, #fff); font-weight: 500; font-size: .9rem; text-decoration: underline; text-underline-offset: 3px; }
 #gate #unlock summary::-webkit-details-marker { display: none; }
 #gate #unlock details .row { flex-direction: row; }
-#gate #unlock input { min-height: 44px; box-sizing: border-box; border: 1px solid #fff; background: #fff; color: #141a2b; }
-#gate button:focus-visible, #gate summary:focus-visible, #gate input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+#gate #unlock input { min-height: 44px; box-sizing: border-box; border: 1px solid var(--gate-fg, #fff); background: #fff; color: #141a2b; }
+#gate button:focus-visible, #gate summary:focus-visible, #gate input:focus-visible { outline: 2px solid var(--gate-focus, var(--gate-fg, #fff)); outline-offset: 2px; }

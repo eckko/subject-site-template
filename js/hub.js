@@ -6,10 +6,12 @@
  * loader that reads "uiVersion" from the subject's subject.json (for example
  * "1" = the newest 1.x.x) and loads this file from jsDelivr:
  *   https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1/js/hub.js
- * Everything else comes from here too: css/hub.css and the icons in img/
- * (added to the page by this file, from the same version).
- * Subject repos hold encrypted data only; change the UI in this repo and
- * release a new tag.
+ * Everything else comes from here too: css/hub.css and the neutral default
+ * icons in img/ (added to the page by this file, from the same version).
+ * A subject gives its sign-in screen and icons their own look from its own
+ * repo, through "theme" in subject.json (see README.md); the template never
+ * holds one subject's look. Subject repos hold encrypted data and that theme
+ * only; change the UI in this repo and release a new tag.
  *
  * What it does: nothing is shown until the reader has signed in (js/unlock.js
  * from the quiz template gets the subject key, the same way the book pages
@@ -22,7 +24,7 @@
  * (recall-quiz:<book id>). The round gear at the bottom right is the quiz
  * template's reading panel (theme, font, size...) plus "Sign out".
  *
- * Reads, next to the page: subject.json (title, bookDetails) and books.json
+ * Reads, next to the page: subject.json (title, bookDetails, theme) and books.json
  * (written by the quiz template's tools/site/build_hub.py). No book content
  * lives in this file.
  */
@@ -42,9 +44,7 @@
   /** The hub's markup: the sign-in screen and the shelf. */
   var MARKUP = [
     "<section id=\"gate\" aria-label=\"Sign in\">",
-    "  <div class=\"gate-art\">",
-    "    <svg aria-hidden=\"true\" viewBox=\"0 0 180 180\"><defs><linearGradient id=\"gateIcon\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#2a8a82\"/><stop offset=\"1\" stop-color=\"#2f4a8f\"/></linearGradient></defs><rect width=\"180\" height=\"180\" rx=\"40\" fill=\"url(#gateIcon)\"/><g fill=\"none\" stroke=\"#fff\" stroke-width=\"7\" stroke-linecap=\"round\" opacity=\".9\"><path d=\"M31.7 68.8A62 62 0 0 1 148.3 68.8\"/><path d=\"M148.3 111.2A62 62 0 0 1 31.7 111.2\"/></g><path d=\"M90 74C80 68 66 67 54 71V108C66 104 80 105 90 111z\" fill=\"#fff\"/><path d=\"M90 74C100 68 114 67 126 71V108C114 104 100 105 90 111z\" fill=\"#e3f0ee\"/></svg>",
-    "  </div>",
+    "  <div class=\"gate-art\" aria-hidden=\"true\"></div>",
     "  <div class=\"gate-body\">",
     "    <h1 id=\"gateTitle\">Books</h1>",
     "    <p class=\"gate-line\">Sign in to open your books. Your account holds the key that unlocks them.</p>",
@@ -706,29 +706,92 @@
     showHub();
   }
 
-  /** Add the favicon and the iOS home-screen icon (served from this repo). */
-  function addIcons() {
-    [["icon", "image/svg+xml", "", "img/icon.svg"],
-     ["apple-touch-icon", "", "180x180", "img/apple-touch-icon.png"]
+  /**
+   * A file named in subject.json "theme", as an address next to the page.
+   * Only plain relative paths of the subject's own folder are accepted: no
+   * scheme, no leading slash, no "..".
+   * @param {*} path
+   * @returns {string} the address, or "" when it is not allowed
+   */
+  function themeAddress(path) {
+    if (typeof path !== "string" || path.indexOf("..") !== -1 ||
+        !/^[A-Za-z0-9_][A-Za-z0-9_.\/-]*$/.test(path)) {
+      return "";
+    }
+    return new URL(path, document.baseURI).href;
+  }
+
+  /** @param {string} address  @returns {string} an image type, or "" */
+  function iconType(address) {
+    if (/\.svg$/i.test(address)) { return "image/svg+xml"; }
+    if (/\.png$/i.test(address)) { return "image/png"; }
+    if (/\.ico$/i.test(address)) { return "image/x-icon"; }
+    return "";
+  }
+
+  /**
+   * Add the favicon and the iOS home-screen icon: the subject's own
+   * (theme.icon, theme.appleTouchIcon) or this repo's neutral default.
+   * @param {object} theme  subject.json "theme" ({} when there is none)
+   */
+  function addIcons(theme) {
+    var icon = themeAddress(theme.icon) || UI_BASE + "img/icon.svg";
+    var touch = themeAddress(theme.appleTouchIcon) ||
+      UI_BASE + "img/apple-touch-icon.png";
+    [["icon", iconType(icon), "", icon],
+     ["apple-touch-icon", "", "180x180", touch]
     ].forEach(function add(spec) {
-      var icon = document.createElement("link");
-      icon.rel = spec[0];
-      if (spec[1]) { icon.type = spec[1]; }
-      if (spec[2]) { icon.setAttribute("sizes", spec[2]); }
-      icon.href = UI_BASE + spec[3];
-      document.head.appendChild(icon);
+      var link = document.createElement("link");
+      link.rel = spec[0];
+      if (spec[1]) { link.type = spec[1]; }
+      if (spec[2]) { link.setAttribute("sizes", spec[2]); }
+      link.href = spec[3];
+      document.head.appendChild(link);
     });
   }
 
-  /** Load the stylesheet first so the page never shows unstyled. */
+  /**
+   * Add a stylesheet; resolves when it has loaded or failed, so a missing
+   * theme file never stops the page.
+   * @param {string} address
+   * @returns {Promise}
+   */
+  function loadStyle(address) {
+    return new Promise(function add(resolve) {
+      var link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = address;
+      link.addEventListener("load", resolve);
+      link.addEventListener("error", resolve);
+      document.head.appendChild(link);
+    });
+  }
+
+  /**
+   * Read subject.json early, for the theme.
+   * @returns {Promise<object>} subject.json, or {} when it cannot be read
+   */
+  function readSubject() {
+    return fetch("subject.json", { cache: "no-cache" }).then(function ok(reply) {
+      return reply.ok ? reply.json() : {};
+    }).catch(function none() {
+      return {};
+    });
+  }
+
+  /**
+   * Load hub.css, then the subject's theme.css (so it wins), before the page
+   * is drawn, so it never shows unstyled or in the wrong look.
+   */
   function start() {
-    addIcons();
-    var link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = UI_BASE + "css/hub.css";
-    link.addEventListener("load", boot);
-    link.addEventListener("error", boot);
-    document.head.appendChild(link);
+    readSubject().then(function themed(subject) {
+      var theme = subject && typeof subject.theme === "object" && subject.theme || {};
+      addIcons(theme);
+      var styles = [UI_BASE + "css/hub.css"];
+      var themeCss = themeAddress(theme.css);
+      if (themeCss) { styles.push(themeCss); }
+      return Promise.all(styles.map(loadStyle));
+    }).then(boot);
   }
 
   if (document.readyState === "loading") {
