@@ -32,8 +32,8 @@ and the icons of a subject (Habit, Emotion, ...) live in that subject's repo
 
 ```json
 { "title": "Habit", "templateTag": "3.2.4", "uiVersion": "2",
-  "theme": { "css": "theme/gate.css", "icon": "theme/icon.svg",
-             "appleTouchIcon": "theme/apple-touch-icon.png" },
+  "theme": { "css": ".theme/gate.css", "icon": ".theme/icon.svg",
+             "appleTouchIcon": ".theme/apple-touch-icon.png" },
   "bookDetails": { "<book id>": { "authors": ["Name"], "edition": "2nd", "year": 2018 } } }
 ```
 
@@ -83,7 +83,9 @@ the page. `books.json` is written by the quiz template's
 A subject gives its sign-in screen and icons their own look from **its own
 repo**; nothing about it is released here. All keys of `theme` are optional,
 and each is a plain relative path inside the subject's folder (no scheme, no
-leading `/`, no `..`; anything else is ignored):
+leading `/`, no `..`; anything else is ignored). Keep them in a dot-folder such
+as `.theme/`: the site check of the quiz template (`build_hub.py --check`)
+counts every other top-level folder as a book and fails without a `book.json`:
 
 | key | what it is |
 |---|---|

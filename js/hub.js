@@ -709,13 +709,15 @@
   /**
    * A file named in subject.json "theme", as an address next to the page.
    * Only plain relative paths of the subject's own folder are accepted: no
-   * scheme, no leading slash, no "..".
+   * scheme, no leading slash, no "..". A first folder like ".theme" is fine
+   * (the quiz template's site check skips dot-folders, so it does not count
+   * as a book).
    * @param {*} path
    * @returns {string} the address, or "" when it is not allowed
    */
   function themeAddress(path) {
     if (typeof path !== "string" || path.indexOf("..") !== -1 ||
-        !/^[A-Za-z0-9_][A-Za-z0-9_.\/-]*$/.test(path)) {
+        !/^\.?[A-Za-z0-9_][A-Za-z0-9_.\/-]*$/.test(path)) {
       return "";
     }
     return new URL(path, document.baseURI).href;
