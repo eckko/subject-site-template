@@ -131,6 +131,14 @@ theme, light, at 16px; a reader's own gear choices win.
 1. Change files here, open a PR, merge to `main`.
 2. Create a release tag `MAJOR.MINOR.PATCH` (for example `1.1.0`: no `v`, never
    a branch). Subject sites load `@1`, so they get it without any change.
+   Use the **Create release** workflow (`.github/workflows/release.yml`):
+   Actions > "Create release" > Run workflow, pick the branch (default `main`)
+   and `patch`, `minor` or `major`, or from a script
+   `gh workflow run release.yml -f branch=main -f release_type=minor`. It
+   works out the next tag from the newest `x.y.z` tag, tags the tip of the
+   branch and publishes a release with generated notes. It stops without
+   creating anything if no `x.y.z` tag exists, the branch has no commits since
+   the newest tag, or the new tag already exists.
 3. Subject sites on `"uiVersion": "1"` may take minutes to hours to see it: jsDelivr caches a
    version range. To refresh at once, open
    `https://purge.jsdelivr.net/gh/eckko/subject-site-template@1/js/hub.js`
