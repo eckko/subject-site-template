@@ -37,6 +37,7 @@
 
   /* The quiz template that provides sign-in, the gear and themes. */
   var QUIZ_TEMPLATE_TAG = "3.2.4";
+  var JSDELIVR = "https://cdn.jsdelivr.net/gh/eckko/";
   var QUIZ_CDN = "https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@" +
     QUIZ_TEMPLATE_TAG + "/";
 
@@ -127,6 +128,8 @@
     var adminCtx = null;               // {user, db, fs} once known to be an admin
     var adminMode = loadAdminMode();   // the admin's own switch in the gear
     var adminSetup = {};               // passed to js/status.js
+    var siteInfo = { ui: "", template: "" };   // uiVersion and templateTag of subject.json
+    var versions = null;               // what the CDN reports (cached for the gear)
     var gearPanel = null;
 
     // ---------------------------------------------------------- helpers
@@ -581,6 +584,118 @@
       body.appendChild(make("p", "admin-note", adminMode ?
         "On: each book shows its build status." :
         "Off. Turn on to see each book's build status."));
+
+      var clear = make("button", "admin-toggle admin-clear", "Clear cache and reload");
+      clear.type = "button";
+      clear.addEventListener("click", function go() {
+        clear.disabled = true;
+        clearCaches(function progress(text) { clear.textContent = text; });
+      });
+      body.appendChild(clear);
+      body.appendChild(make("p", "admin-note",
+        "Asks jsDelivr for fresh copies, empties this browser's saved copies, then reloads."));
+
+      body.appendChild(make("h4", null, "Versions loaded"));
+      var list = make("dl", "admin-versions");
+      body.appendChild(list);
+      showVersions(list, redraw);
+    }
+
+    /** @returns {string[]} every jsDelivr file this site loads, as full URLs */
+    function cdnFiles() {
+      var quiz = ["js/unlock.js", "css/theme-defaults.css", "css/reading-panel.css"]
+        .concat(SHARED_SCRIPTS);
+      var urls = [];
+      var ui = JSDELIVR + "subject-site-template@" + siteInfo.ui + "/";
+      ["js/hub.js", "js/status.js", "css/status.css", "css/hub.css"].forEach(function add(file) {
+        urls.push(ui + file);
+      });
+      var tags = [QUIZ_TEMPLATE_TAG];
+      if (siteInfo.template && tags.indexOf(siteInfo.template) === -1) { tags.push(siteInfo.template); }
+      tags.forEach(function each(tag) {
+        quiz.forEach(function add(file) {
+          urls.push(JSDELIVR + "recall-quiz-site-template@" + tag + "/" + file);
+        });
+      });
+      return urls;
+    }
+
+    /**
+     * Purge jsDelivr, refresh this browser's saved copy of each file, drop
+     * any Cache Storage / service worker, then reload.
+     * @param {function(string): void} say  shows progress on the button
+     */
+    function clearCaches(say) {
+      var urls = cdnFiles();
+      var quiet = function quiet() { return null; };
+      say("Asking jsDelivr…");
+      Promise.all(urls.map(function purge(url) {
+        return fetch(url.replace("://cdn.", "://purge."), { mode: "no-cors" }).catch(quiet);
+      })).then(function wait() {
+        say("Refreshing this browser…");
+        return new Promise(function later(done) { setTimeout(done, 2500); });
+      }).then(function again() {
+        return Promise.all(urls.map(function fresh(url) {
+          return fetch(url, { cache: "reload" }).catch(quiet);
+        }));
+      }).then(function storage() {
+        var jobs = [];
+        if (window.caches && caches.keys) {
+          jobs.push(caches.keys().then(function each(keys) {
+            return Promise.all(keys.map(function drop(key) { return caches.delete(key); }));
+          }).catch(quiet));
+        }
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function each(all) {
+            return Promise.all(all.map(function off(one) { return one.unregister(); }));
+          }).catch(quiet));
+        }
+        return Promise.all(jobs);
+      }).then(function done() {
+        say("Reloading…");
+        location.reload();
+      });
+    }
+
+    /**
+     * Fill the "Versions loaded" list: what this page really got, and what
+     * jsDelivr would serve now (a difference means a cached older copy).
+     */
+    function showVersions(list, redraw) {
+      var rows = function rows(info) {
+        list.textContent = "";
+        info.forEach(function row(pair) {
+          list.appendChild(make("dt", null, pair[0]));
+          list.appendChild(make("dd", null, pair[1]));
+        });
+      };
+      if (versions) { rows(versions); return; }
+      rows([["Checking…", ""]]);
+      var ui = siteInfo.ui;
+      var hubUrl = JSDELIVR + "subject-site-template@" + ui + "/js/hub.js";
+      var header = function header(url) {
+        return fetch(url).then(function got(reply) {
+          return reply.headers.get("x-jsd-version") || "unknown";
+        }).catch(function none() { return "unknown"; });
+      };
+      var latest = function latest(repo, spec) {
+        return fetch("https://data.jsdelivr.com/v1/packages/gh/eckko/" + repo +
+          "/resolved?specifier=" + encodeURIComponent(spec)).then(function got(reply) {
+          return reply.json();
+        }).then(function pick(data) { return data.version || "unknown"; })
+          .catch(function none() { return "unknown"; });
+      };
+      Promise.all([header(hubUrl), latest("subject-site-template", ui)]).then(function both(got) {
+        var note = got[0] !== "unknown" && got[1] !== "unknown" && got[0] !== got[1] ?
+          " (older copy cached, use Clear cache)" : "";
+        versions = [
+          ["Subject UI (hub)", got[0] + note],
+          ["Subject UI latest on @" + ui, got[1]],
+          ["Quiz template (hub)", QUIZ_TEMPLATE_TAG],
+          ["Quiz template (books)", siteInfo.template || "unknown"],
+        ];
+        rows(versions);
+      });
     }
 
     /** @param {HTMLElement} item  add the status band when Admin mode is on */
@@ -758,6 +873,7 @@
           summary: "", coverUrl: "",
         }, book, (subject.bookDetails || {})[book.id] || {});
       });
+      siteInfo = { ui: String(subject.uiVersion || ""), template: String(subject.templateTag || "") };
       adminSetup = {
         subjectTitle: subject.title || "Books",
         workflowUrl: subject.admin && subject.admin.workflowUrl,
