@@ -170,3 +170,8 @@ img.cover-img { display: block; width: 100%; height: 100%; object-fit: contain; 
   border-color: var(--color-accent, #2743d6);
 }
 .admin-note { margin: .5rem 0 0; font-size: .85rem; color: var(--color-text-muted, #5b6578); }
+.admin-clear { margin-top: .75rem; }
+.admin-clear:disabled { opacity: .6; }
+.admin-versions { margin: .5rem 0 0; display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; font-size: .85rem; }
+.admin-versions dt { color: var(--color-text-muted, #5b6578); }
+.admin-versions dd { margin: 0; font-weight: 600; word-break: break-word; }

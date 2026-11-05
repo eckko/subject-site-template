@@ -188,6 +188,16 @@ other reader: nothing extra is downloaded for them.
   collapsed; a stage that needs you is open, says what to do, and has one
   compact line per format: **Open**, a green **✓** (verified) and a red **✗**
   (error). An error stays red until the file changes or you tap ✓.
+- **Clear cache and reload:** in the same gear section. It asks jsDelivr to
+  purge every file this site loads (the UI at `uiVersion` and the quiz
+  template tags), re-fetches them with `cache: "reload"` so this browser's
+  saved copy is replaced, drops any Cache Storage or service worker, and
+  reloads. A browser that still has a hub.js from before this button existed
+  (for example Safari) must clear its website data once by hand.
+- **Versions loaded:** shows the hub UI version this browser actually received
+  (jsDelivr's `x-jsd-version` header), what `@uiVersion` resolves to now (a
+  difference means an older cached copy), and the quiz template version the hub
+  loaded and the newest release. All come from jsDelivr, never from `subject.json`.
 - **Who is an admin:** a user with a document `admins/<uid>` in Firestore (made
   by hand in the Firebase console). Everyone else never sees the switch.
 - **Where the data is:** Firestore `bookStatus/<book folder>` with `auto`
