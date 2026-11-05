@@ -165,7 +165,8 @@
     for (i = 0; i < info.stages.length; i += 1) {
       stage = info.stages[i];
       if (stage.auto === "none") {
-        return { kind: "none", text: i === 0 ? "Not started" : stage.name + " not built yet" };
+        return { kind: "none", text: i === 0 ? "Not started" :
+          stage.key === "quiz" ? "No quiz yet" : stage.name + " not built yet" };
       }
     }
     return { kind: "ok", text: "All done" };
@@ -396,6 +397,10 @@
     var manualTag = { ok: ["ok", "✓ You verified"], check: ["check", "Your check needed"],
       stale: ["attn", "! Needs your re-check"],
       none: ["none", "– Waiting on the build"] }[stage.manual];
+    if (stage.known && stage.key === "quiz" && stage.auto === "none") {
+      autoTag = ["none", "– No quiz yet"];
+      manualTag = ["none", "– Waiting on the quiz"];
+    }
     if (!stage.known) {
       autoTag = ["none", "– Not checked yet"];
       manualTag = ["none", "– Waiting on the check"];
