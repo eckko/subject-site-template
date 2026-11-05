@@ -805,10 +805,12 @@
         status.textContent = "Loading your books…";
         gate.hidden = true;
         app.hidden = false;
-        showSignOut(true);
         return Promise.all([files, gearReady]);
       })
       .then(function show(done) {
+        /* Only now is the gear built, so Sign out can be shown (a saved
+           sign-in can finish before the gear's scripts have loaded). */
+        showSignOut(true);
         start(done[0][0], done[0][1]);
         /* Admins only: the gear gets a switch, and Admin mode (when on) adds
            the build status to every book. Everyone else is unaffected. */
