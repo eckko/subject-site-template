@@ -18,6 +18,9 @@ in the subject repo; a new major version is adopted by hand, by editing
 ```
 css/hub.css               all styles of the hub (neutral default look)
 js/hub.js                 the hub: markup, sign-in screen, shelf, gear, icons
+js/status.js              admin only: the book status band and page (loaded on demand)
+css/status.css            styles of the admin status band and page
+firestore/status.rules    the Firestore rules the admin status needs
 img/icon.svg              neutral default favicon
 img/apple-touch-icon.png  neutral default 180x180 home-screen icon for iOS
 ```
@@ -171,3 +174,34 @@ folder); sign in with the subject key. There is no build step.
 
 `.github/workflows/check.yml` runs `node --check js/hub.js` and verifies the
 tags and files described above.
+
+## Admin book status (3.0.0)
+
+An admin sees how far each book is: files, structure, notes and quiz, each with
+an **Auto-checked** part (the book-pipeline "Check books" workflow) and a
+**You verified** part (your own sign-off in the reader). It is hidden from every
+other reader: nothing extra is downloaded for them.
+
+- **Turn it on:** sign in as an admin, open the gear, and switch on **Admin >
+  Book status**. Each book gets a footer band (a status dot in the compact
+  list). **Status >** opens the full page: finished or not-started stages are
+  collapsed; a stage that needs you is open, says what to do, and has **Open in
+  reader** and **Mark verified** per format.
+- **Who is an admin:** a user with a document `admins/<uid>` in Firestore (made
+  by hand in the Firebase console). Everyone else never sees the switch.
+- **Where the data is:** Firestore `bookStatus/<book folder>` with `auto`
+  (written by the pipeline) and `signoffs` (written by the page, latest only).
+  Nothing is stored as "stale": a sign-off whose hash differs from the current
+  file's hash, or whose structure hash differs, is stale when read.
+- **Rules:** merge `firestore/status.rules` into the project's rules.
+- **Pipeline:** `eckko/book-pipeline`, workflow "Check books" (nightly, and by
+  hand). It needs the secret `FIREBASE_SERVICE_ACCOUNT`.
+- **Re-run checks** opens that workflow in GitHub; set `"admin": {"workflowUrl":
+  "..."}` in `subject.json` to point it somewhere else.
+- The Firebase SDK version in `hub.js` must equal `FIREBASE_VERSION` in the quiz
+  template's `js/unlock.js` (they share one Firebase app; if they differ the
+  admin switch simply does not appear).
+
+This is a **major** release because the hub now depends on Firestore rules and
+the pipeline workflow. A subject site adopts it by editing `uiVersion` to `"3"`.
+Run the logic tests with `node --test tests/status.test.js`.

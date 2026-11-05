@@ -24,6 +24,10 @@
  * (recall-quiz:<book id>). The round gear at the bottom right is the quiz
  * template's reading panel (theme, font, size...) plus "Sign out".
  *
+ * Admins also get an "Admin > Book status" switch in the gear: it loads
+ * js/status.js and css/status.css, which add each book's build status (see
+ * README.md, "Admin book status"). Other readers never download them.
+ *
  * Reads, next to the page: subject.json (title, bookDetails, theme) and books.json
  * (written by the quiz template's tools/site/build_hub.py). No book content
  * lives in this file.
@@ -88,6 +92,10 @@
        (never a branch). Change it here, in this repo, and release a new tag. */
     var CDN = QUIZ_CDN;
     var UI_KEY = "recall-hub:ui";
+    var ADMIN_KEY = "recall-hub:admin";
+    /* Must equal FIREBASE_VERSION in the quiz template's js/unlock.js, so the
+       admin check shares the sign-in's Firebase app. */
+    var FIREBASE_ROOT = "https://www.gstatic.com/firebasejs/12.19.0/firebase-";
     var OPENED_KEY = "recall-hub:opened:";
     var PROGRESS_KEY = "recall-quiz:";
     var SHARED_SCRIPTS = ["js/default-settings.js", "js/themes-list.js",
@@ -116,8 +124,21 @@
     var books = [];                    // books.json entries plus what we learn
     var ui = loadUi();
     var key = null;                    // CryptoKey once signed in
+    var adminCtx = null;               // {user, db, fs} once known to be an admin
+    var adminMode = loadAdminMode();   // the admin's own switch in the gear
+    var adminSetup = {};               // passed to js/status.js
+    var gearPanel = null;
 
     // ---------------------------------------------------------- helpers
+
+    /** @returns {boolean} whether this browser has Admin mode switched on */
+    function loadAdminMode() {
+      try {
+        return localStorage.getItem(ADMIN_KEY) === "1";
+      } catch (problem) {
+        return false;
+      }
+    }
 
     /** @returns {{view: string, sort: string, filter: string}} */
     function loadUi() {
@@ -423,7 +444,7 @@
       actions.appendChild(makeAction(book, "Test", "quiz", false));
       meta.appendChild(actions);
       item.appendChild(meta);
-      return item;
+      return withStatus(item, book);
     }
 
     /** @param {object} book  @returns {HTMLElement} one list row */
@@ -447,7 +468,7 @@
       actions.appendChild(makeAction(book, "Test only", "quiz", false));
       body.appendChild(actions);
       item.appendChild(body);
-      return item;
+      return withStatus(item, book);
     }
 
     /** @param {object} book  @returns {HTMLElement} one compact row */
@@ -463,6 +484,7 @@
       item.appendChild(text);
       item.appendChild(makeCompactLink(book, "Read", "read"));
       item.appendChild(makeCompactLink(book, "Test", "quiz"));
+      if (adminOn()) { item.appendChild(window.SubjectStatus.dot(book)); }
       return item;
     }
 
@@ -476,6 +498,95 @@
       var link = makeAction(book, label, view, false);
       link.className = "";
       return link;
+    }
+
+    // ------------------------------------------------------ admin
+
+    /**
+     * Is the signed-in reader an admin? Only an account with a document in
+     * admins/<uid> is. Uses the sign-in's own Firebase app (no second login).
+     * @returns {Promise<{user: object, db: object, fs: object}|null>}
+     */
+    function checkAdmin() {
+      return Promise.all([import(FIREBASE_ROOT + "app.js"),
+        import(FIREBASE_ROOT + "auth.js"),
+        import(FIREBASE_ROOT + "firestore.js")]).then(function sdk(modules) {
+        if (!modules[0].getApps().length) { return null; }
+        var app = modules[0].getApp();
+        var auth = modules[1].getAuth(app);
+        return new Promise(function wait(resolve) {
+          var stop = modules[1].onAuthStateChanged(auth, function seen(user) {
+            stop();
+            resolve(user);
+          });
+        }).then(function known(user) {
+          if (!user) { return null; }
+          var db = modules[2].getFirestore(app);
+          return modules[2].getDoc(modules[2].doc(db, "admins", user.uid))
+            .then(function found(snapshot) {
+              return snapshot.exists() ? { user: user, db: db, fs: modules[2] } : null;
+            });
+        });
+      }).catch(function none() { return null; });
+    }
+
+    /** @returns {boolean} whether the status bands should be drawn */
+    function adminOn() {
+      return !!(adminMode && adminCtx && window.SubjectStatus &&
+        window.SubjectStatus.ready());
+    }
+
+    /** Load the admin module (once) and read the status documents. */
+    function loadAdminUi() {
+      if (window.SubjectStatus && window.SubjectStatus.ready()) {
+        return window.SubjectStatus.reload();
+      }
+      addStyle(UI_BASE + "css/status.css");
+      return addScript(UI_BASE + "js/status.js").then(function ready() {
+        return window.SubjectStatus.init(adminCtx, adminSetup);
+      });
+    }
+
+    /** @param {boolean} on  switch Admin mode on or off and redraw */
+    function setAdminMode(on) {
+      adminMode = on;
+      try {
+        localStorage.setItem(ADMIN_KEY, on ? "1" : "0");
+      } catch (problem) {
+        // not stored
+      }
+      if (!on) { draw(); return; }
+      loadAdminUi().then(draw).catch(function failed() {
+        adminMode = false;
+        draw();
+      });
+    }
+
+    /**
+     * The gear's "Admin" section, only for an admin.
+     * @param {HTMLElement} body  the gear panel's body
+     * @param {function(): void} redraw  redraws the gear panel
+     */
+    function addAdminSection(body, redraw) {
+      if (!adminCtx) { return; }
+      body.appendChild(make("h4", null, "Admin"));
+      var toggle = make("button", "admin-toggle", "Book status");
+      toggle.type = "button";
+      toggle.setAttribute("aria-pressed", String(adminMode));
+      toggle.addEventListener("click", function flip() {
+        setAdminMode(!adminMode);
+        redraw();
+      });
+      body.appendChild(toggle);
+      body.appendChild(make("p", "admin-note", adminMode ?
+        "On: each book shows its build status." :
+        "Off. Turn on to see each book's build status."));
+    }
+
+    /** @param {HTMLElement} item  add the status band when Admin mode is on */
+    function withStatus(item, book) {
+      if (adminOn()) { item.appendChild(window.SubjectStatus.band(book)); }
+      return item;
     }
 
     // ------------------------------------------------------ the list
@@ -608,11 +719,11 @@
         window.RecallQuiz.reading.configure({ fontSize: 16, font: "theme" });
         window.RecallQuiz.reading.useBook("subject-hub");
         window.RecallQuizTheme.useBook("subject-hub");
-        window.RecallQuiz.readingPanel.create({
+        gearPanel = window.RecallQuiz.readingPanel.create({
           homeLabel: "Sign out",
           onHome: function signOut() { window.SubjectUnlock.reset(); },
           subjectPageAddress: null,
-          addSections: null,
+          addSections: addAdminSection,
           onReset: function noop() {},
         });
         showSignOut(false);
@@ -644,6 +755,11 @@
           summary: "", coverUrl: "",
         }, book, (subject.bookDetails || {})[book.id] || {});
       });
+      adminSetup = {
+        subjectTitle: subject.title || "Books",
+        workflowUrl: subject.admin && subject.admin.workflowUrl,
+        onChange: function again() { draw(); },
+      };
       status.hidden = true;
       shelf.hidden = false;
       document.getElementById("controls").hidden = false;
@@ -689,7 +805,17 @@
         showSignOut(true);
         return Promise.all([files, gearReady]);
       })
-      .then(function show(done) { start(done[0][0], done[0][1]); })
+      .then(function show(done) {
+        start(done[0][0], done[0][1]);
+        /* Admins only: the gear gets a switch, and Admin mode (when on) adds
+           the build status to every book. Everyone else is unaffected. */
+        return checkAdmin().then(function known(found) {
+          if (!found) { return null; }
+          adminCtx = found;
+          if (gearPanel) { gearPanel.redraw(); }
+          return adminMode ? loadAdminUi().then(draw) : null;
+        }).catch(function ignore() { /* the shelf works without it */ });
+      })
       .catch(function failed(problem) {
         gate.hidden = true;
         app.hidden = false;
