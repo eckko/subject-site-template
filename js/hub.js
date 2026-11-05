@@ -96,6 +96,15 @@
     var ADMIN_KEY = "recall-hub:admin";
     /* Must equal FIREBASE_VERSION in the quiz template's js/unlock.js, so the
        admin check shares the sign-in's Firebase app. */
+    /* Must equal DEFAULT_CONFIG in the quiz template's js/unlock.js. */
+    var FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBuMaFDHAx1cEvD7eInPlusJEHa2mU47Ww",
+      authDomain: "reading-progress-39717.firebaseapp.com",
+      projectId: "reading-progress-39717",
+      storageBucket: "reading-progress-39717.firebasestorage.app",
+      messagingSenderId: "180364097468",
+      appId: "1:180364097468:web:448c46155e6a013b155db9",
+    };
     var FIREBASE_ROOT = "https://www.gstatic.com/firebasejs/12.19.0/firebase-";
     var OPENED_KEY = "recall-hub:opened:";
     var PROGRESS_KEY = "recall-quiz:";
@@ -506,6 +515,15 @@
 
     // ------------------------------------------------------ admin
 
+    /** @returns {object} the Firebase web config, picked as the quiz template picks it */
+    function firebaseConfig() {
+      var meta = document.querySelector('meta[name="firebase-config"]');
+      if (meta) {
+        try { return JSON.parse(meta.content); } catch (problem) { /* use the default */ }
+      }
+      return FIREBASE_CONFIG;
+    }
+
     /**
      * Is the signed-in reader an admin? Only an account with a document in
      * admins/<uid> is. Uses the sign-in's own Firebase app (no second login).
@@ -515,8 +533,11 @@
       return Promise.all([import(FIREBASE_ROOT + "app.js"),
         import(FIREBASE_ROOT + "auth.js"),
         import(FIREBASE_ROOT + "firestore.js")]).then(function sdk(modules) {
-        if (!modules[0].getApps().length) { return null; }
-        var app = modules[0].getApp();
+        /* A reader who is already unlocked on this device never starts the
+           sign-in's Firebase app, so start it here, with the same settings
+           (the same app and saved sign-in as the quiz template's). */
+        var app = modules[0].getApps().length ? modules[0].getApp() :
+          modules[0].initializeApp(firebaseConfig());
         var auth = modules[1].getAuth(app);
         return new Promise(function wait(resolve) {
           var stop = modules[1].onAuthStateChanged(auth, function seen(user) {
