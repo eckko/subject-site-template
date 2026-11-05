@@ -129,6 +129,7 @@
     var adminMode = loadAdminMode();   // the admin's own switch in the gear
     var adminSetup = {};               // passed to js/status.js
     var siteInfo = { ui: "", template: "" };   // uiVersion and templateTag of subject.json
+    var adminError = "";
     var versions = null;               // what the CDN reports (cached for the gear)
     var gearPanel = null;
 
@@ -539,13 +540,43 @@
         window.SubjectStatus.ready());
     }
 
+    /**
+     * The address of this hub.js's own exact release ("...@3.0.2/"), so the
+     * admin files always match it and are never an older copy that a browser
+     * (Safari, mostly) kept under the "@3" address. Falls back to "@3".
+     * @returns {Promise<string>}
+     */
+    var pinnedBase = null;
+    function exactBase() {
+      if (pinnedBase) { return pinnedBase; }
+      var exact = /^[0-9]+\.[0-9]+\.[0-9]+$/;
+      var base = function base(version) { return JSDELIVR + "subject-site-template@" + version + "/"; };
+      pinnedBase = fetch(script.src).then(function header(reply) {
+        var version = reply.headers.get("x-jsd-version");
+        if (exact.test(version || "")) { return base(version); }
+        throw new Error("no version header");
+      }).catch(function api() {
+        var spec = (UI_BASE.match(/subject-site-template@([^/]+)\//) || [])[1];
+        if (!spec) { return UI_BASE; }
+        return fetch("https://data.jsdelivr.com/v1/packages/gh/eckko/subject-site-template/resolved?specifier=" +
+          encodeURIComponent(spec)).then(function json(reply) {
+          return reply.json();
+        }).then(function pick(data) {
+          return exact.test(data.version || "") ? base(data.version) : UI_BASE;
+        });
+      }).catch(function plain() { return UI_BASE; });
+      return pinnedBase;
+    }
+
     /** Load the admin module (once) and read the status documents. */
     function loadAdminUi() {
       if (window.SubjectStatus && window.SubjectStatus.ready()) {
         return window.SubjectStatus.reload();
       }
-      addStyle(UI_BASE + "css/status.css");
-      return addScript(UI_BASE + "js/status.js").then(function ready() {
+      return exactBase().then(function load(base) {
+        addStyle(base + "css/status.css");
+        return addScript(base + "js/status.js");
+      }).then(function ready() {
         return window.SubjectStatus.init(adminCtx, adminSetup);
       });
     }
@@ -558,10 +589,20 @@
       } catch (problem) {
         // not stored
       }
+      adminError = "";
       if (!on) { draw(); return; }
+      if (window.SubjectStatus && window.SubjectStatus.ready()) {
+        /* Already loaded: show it at once, refresh quietly, and keep what
+           is shown if the refresh fails (a switch must never lose the data). */
+        draw();
+        window.SubjectStatus.reload().then(draw).catch(function keep() { /* keep old data */ });
+        return;
+      }
       loadAdminUi().then(draw).catch(function failed() {
         adminMode = false;
+        adminError = "Could not load the status. Try again.";
         draw();
+        if (gearPanel) { gearPanel.redraw(); }
       });
     }
 
@@ -581,7 +622,7 @@
         redraw();
       });
       body.appendChild(toggle);
-      body.appendChild(make("p", "admin-note", adminMode ?
+      body.appendChild(make("p", "admin-note", adminError ? adminError : adminMode ?
         "On: each book shows its build status." :
         "Off. Turn on to see each book's build status."));
 
