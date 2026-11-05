@@ -133,6 +133,7 @@
       autoDone: stages.filter(function ok(s) { return s.auto === "ok"; }).length,
       manualDone: stages.filter(function ok(s) { return s.manual === "ok"; }).length,
     };
+    stages.forEach(function mark(stage) { stage.known = out.known; });
     out.headline = headline(out);
     return out;
   }
@@ -395,6 +396,10 @@
     var manualTag = { ok: ["ok", "✓ You verified"], check: ["check", "Your check needed"],
       stale: ["attn", "! Needs your re-check"],
       none: ["none", "– Waiting on the build"] }[stage.manual];
+    if (!stage.known) {
+      autoTag = ["none", "– Not checked yet"];
+      manualTag = ["none", "– Waiting on the check"];
+    }
     tags.appendChild(make("span", "st-tag st-chip-" + autoTag[0], autoTag[1]));
     tags.appendChild(make("span", "st-tag st-chip-" + manualTag[0], manualTag[1]));
     text.appendChild(tags);

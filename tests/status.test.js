@@ -77,3 +77,9 @@ test("a stage that is not built is Not started, not a failure", () => {
   const info = status.derive({ auto: onlyFiles, signoffs });
   assert.deepEqual(info.headline, { kind: "none", text: "Structure not built yet" });
 });
+
+test("every stage of an unchecked book knows it was never checked", () => {
+  const info = status.derive(undefined);
+  assert.ok(info.stages.every((stage) => stage.known === false));
+  assert.ok(status.derive({ auto: auto(), signoffs: {} }).stages.every((stage) => stage.known));
+});
