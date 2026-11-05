@@ -78,6 +78,16 @@ test("a stage that is not built is Not started, not a failure", () => {
   assert.deepEqual(info.headline, { kind: "none", text: "Structure not built yet" });
 });
 
+test("a book whose only gap is the quiz says No quiz yet", () => {
+  const noQuiz = auto({ quiz: { present: false, hash: null } });
+  const signoffs = {
+    files_epub: so("e1"), files_pdf: so("p1"), structure: so("s1"),
+    notes_epub: so("n1", "s1"), notes_pdf: so("n2", "s1"), notes_docx: so("n3", "s1"),
+  };
+  assert.deepEqual(status.derive({ auto: noQuiz, signoffs }).headline,
+    { kind: "none", text: "No quiz yet" });
+});
+
 test("every stage of an unchecked book knows it was never checked", () => {
   const info = status.derive(undefined);
   assert.ok(info.stages.every((stage) => stage.known === false));
