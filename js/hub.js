@@ -585,7 +585,10 @@
 
     /** @param {HTMLElement} item  add the status band when Admin mode is on */
     function withStatus(item, book) {
-      if (adminOn()) { item.appendChild(window.SubjectStatus.band(book)); }
+      if (adminOn()) {
+        item.classList.add("has-status");
+        item.appendChild(window.SubjectStatus.band(book));
+      }
       return item;
     }
 
