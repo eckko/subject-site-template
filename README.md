@@ -184,8 +184,8 @@ other reader: nothing extra is downloaded for them.
 
 - **Turn it on:** sign in as an admin, open the gear, and switch on **Admin >
   Book status**. Each book gets a footer band (a status dot in the compact
-  list). **Status >** opens the full page: finished or not-started stages are
-  collapsed; a stage that needs you is open, says what to do, and has one
+  list). **Status >** opens the full page: stages that are finished, not started or only waiting for your check are
+  collapsed; a stage with a problem is open and has one
   compact line per format: **Open**, a green **✓** (verified) and a red **✗**
   (error). An error stays red until the file changes or you tap ✓.
 - **Clear cache and reload:** in the same gear section. It asks jsDelivr to
