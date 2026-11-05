@@ -5,7 +5,7 @@ loads this UI from jsDelivr at the version named by `uiVersion` in its
 `subject.json` (`"2"` = newest 2.x.x). Each subject's own look (sign-in
 colours and art, icons) lives in that subject's repo, named by `theme` in its
 `subject.json`; never put one subject's look here, the default stays neutral.
-Never put a book, a key,
+`js/status.js` and `css/status.css` are the admin-only status view, loaded on demand by `js/hub.js`; `node --test tests/status.test.js` checks its logic. Never put a book, a key,
 a cover or any readable book text here. Keep `js/hub.js` plain ES5-style
 browser code (no build step, no modules); keep `QUIZ_TEMPLATE_TAG` an exact
 tag of eckko/recall-quiz-site-template (no `v`, never a branch). A released
