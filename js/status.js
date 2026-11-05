@@ -380,7 +380,9 @@
 
   /** @returns {HTMLElement} one stage card of the full page */
   function stageCard(book, stage, redraw) {
-    var needs = stage.auto === "fail" || stage.manual === "stale" || stage.manual === "check";
+    /* Open by default only when something is wrong; a stage that just waits
+       for your check stays closed. */
+    var needs = stage.auto === "fail" || stage.manual === "stale";
     var flag = opened[book.folder + "/" + stage.key];
     var open = flag === undefined ? needs : flag;
     var kind = (stage.auto === "fail" || stage.manual === "stale") ? "attn" :
@@ -421,15 +423,6 @@
     if (!open) { return card; }
 
     var body = make("div", "st-card-body");
-    var steps = stepsFor(stage);
-    if (steps.length) {
-      var todo = make("div", "st-todo");
-      todo.appendChild(make("strong", null, "What to do"));
-      var list = make("ol");
-      steps.forEach(function each(step) { list.appendChild(make("li", null, step)); });
-      todo.appendChild(list);
-      body.appendChild(todo);
-    }
     body.appendChild(make("h4", "st-sub", "Auto-checked"));
     stage.items.forEach(function each(item) {
       var good = item.present;
@@ -440,11 +433,11 @@
         item.required ? " is missing" : " not added (optional)")));
       body.appendChild(row);
     });
-    body.appendChild(make("h4", "st-sub", stage.items.length > 1 ? "You verified · per format" : "You verified"));
+    body.appendChild(make("h4", "st-sub", "You verified"));
     stage.items.filter(function has(item) { return item.present; }).forEach(function each(item) {
       var row = make("div", "st-item st-item-" + item.state);
       var names = make("span", "st-item-names");
-      names.appendChild(make("strong", null, item.label));
+      names.appendChild(make("span", null, item.label + (item.name ? " (" + item.name + ")" : "")));
       var at = item.signoff && when(item.signoff.verifiedAt);
       var sub = item.state === "ok" ? "Verified " + at :
         item.state === "stale" ? (item.reason === "marked_error" ? "Error marked " + at :
