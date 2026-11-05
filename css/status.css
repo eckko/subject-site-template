@@ -121,11 +121,17 @@
 .st-fact { margin: 0; display: flex; gap: .5rem; padding: .3rem 0; font-size: .85rem; border-bottom: 1px solid var(--st-line); }
 .st-glyph { width: 1rem; flex: none; font-weight: 700; }
 .st-glyph.st-ok { color: var(--st-ok); } .st-glyph.st-attn { color: var(--st-attn); } .st-glyph.st-none { color: var(--st-muted); }
-.st-item { border: 1px solid var(--st-line); border-radius: .6rem; padding: .6rem .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.st-item { border: 1px solid var(--st-line); border-radius: .6rem; padding: .25rem .25rem .25rem .75rem; display: flex; align-items: center; gap: .25rem; }
 .st-item-stale { border-color: var(--st-attn); border-width: 1.5px; }
 .st-item-top { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 .st-item-names { display: flex; flex-direction: column; min-width: 0; }
 .st-item-names small { color: var(--st-muted); font-size: .75rem; }
+.st-item-names { flex: 1; }
+.st-mini { min-height: 44px; min-width: 44px; padding: 0 .5rem; display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 600; color: var(--st-text); text-decoration: underline; }
+.st-mark { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: none; font-size: 1.25rem; font-weight: 700; cursor: pointer; }
+.st-mark-ok { color: var(--st-ok); } .st-mark-error { color: var(--st-attn); }
+.st-mark-ok.st-on { color: #fff; background: var(--st-ok); } .st-mark-error.st-on { color: #fff; background: var(--st-attn); }
+.st-mark:disabled { opacity: .5; }
 .st-acts { display: flex; gap: .5rem; }
 .st-pipe { display: flex; flex-direction: column; gap: .5rem; background: color-mix(in srgb, var(--st-admin) 9%, var(--st-card)); border-color: color-mix(in srgb, var(--st-admin) 35%, var(--st-line)); }
 .st-pipe small { font-size: .72rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--st-admin); }

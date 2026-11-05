@@ -185,8 +185,9 @@ other reader: nothing extra is downloaded for them.
 - **Turn it on:** sign in as an admin, open the gear, and switch on **Admin >
   Book status**. Each book gets a footer band (a status dot in the compact
   list). **Status >** opens the full page: finished or not-started stages are
-  collapsed; a stage that needs you is open, says what to do, and has **Open in
-  reader** and **Mark verified** per format.
+  collapsed; a stage that needs you is open, says what to do, and has one
+  compact line per format: **Open**, a green **✓** (verified) and a red **✗**
+  (error). An error stays red until the file changes or you tap ✓.
 - **Who is an admin:** a user with a document `admins/<uid>` in Firestore (made
   by hand in the Firebase console). Everyone else never sees the switch.
 - **Where the data is:** Firestore `bookStatus/<book folder>` with `auto`

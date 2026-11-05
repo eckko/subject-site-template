@@ -9,8 +9,8 @@
  *   bookStatus/<book folder>
  *     auto      written by the book-pipeline "Check books" workflow: which
  *               files exist and a hash of each (see tools/book_status.py there)
- *     signoffs  written here when the admin taps "Mark verified":
- *               { <stage>_<format>: { hash, basedOn, verifiedAt, verifiedBy } }
+ *     signoffs  written here when the admin taps ✓ or ✗:
+ *               { <stage>_<format>: { result ("ok"|"error", absent = ok), hash, basedOn, verifiedAt, verifiedBy } }
  *               Only the latest sign-off per item is kept.
  * Nothing is stored as "verified" or "stale": the state is worked out on every
  * read by comparing the sign-off's hash with the current one, so a tick can
@@ -53,6 +53,7 @@
     if (basedOn !== undefined && (signoff.basedOn || null) !== (basedOn || null)) {
       return { state: "stale", reason: "structure_changed" };
     }
+    if (signoff.result === "error") { return { state: "stale", reason: "marked_error" }; }
     return { state: "ok" };
   }
 
@@ -191,7 +192,7 @@
       steps.push(stage.key === "notes" || stage.key === "quiz" ?
         "Look over the headings against the book structure." :
         "Look it over.");
-      steps.push("Tap Mark verified" + (needs[0].format ? " on the " + needs[0].label : "") + ".");
+      steps.push("Tap ✓ " + (needs[0].format ? "on the " + needs[0].label + " " : "") + "if it is right, or ✗ if it has an error.");
     }
     return steps;
   }
@@ -255,10 +256,10 @@
    * Save the admin's sign-off for one item, then reload that book.
    * @returns {Promise}
    */
-  function sign(book, item) {
+  function sign(book, item, result) {
     var change = {};
     change["signoffs." + item.id] = {
-      hash: item.hash, basedOn: item.basedOn === undefined ? null : item.basedOn,
+      result: result === "error" ? "error" : "ok", hash: item.hash, basedOn: item.basedOn === undefined ? null : item.basedOn,
       verifiedAt: ctx.fs.serverTimestamp(),
       verifiedBy: ctx.user.email || ctx.user.uid,
     };
@@ -335,8 +336,10 @@
           var thing = (item.format ? stage.name.toLowerCase() + " " + item.label : stage.name.toLowerCase());
           return {
             kind: "attn", item: item, stage: stage,
-            title: "Look at the " + thing + " again",
-            text: (item.reason === "structure_changed" ?
+            title: (item.reason === "marked_error" ? "Fix the " : "Look at the ") + thing +
+              (item.reason === "marked_error" ? "" : " again"),
+            text: item.reason === "marked_error" ? "You marked it as having an error" + (was ? " on " + was : "") + "." :
+              (item.reason === "structure_changed" ?
               "The book structure changed after you verified it" :
               "It changed after you verified it") + (was ? " on " + was : "") + ".",
           };
@@ -437,44 +440,44 @@
         item.required ? " is missing" : " not added (optional)")));
       body.appendChild(row);
     });
-    body.appendChild(make("h4", "st-sub", stage.items.length > 1 ? "Your check · per format" : "Your check"));
+    body.appendChild(make("h4", "st-sub", stage.items.length > 1 ? "You verified · per format" : "You verified"));
     stage.items.filter(function has(item) { return item.present; }).forEach(function each(item) {
       var row = make("div", "st-item st-item-" + item.state);
-      var top = make("div", "st-item-top");
       var names = make("span", "st-item-names");
       names.appendChild(make("strong", null, item.label));
-      var sub = item.state === "ok" ? "Verified " + when(item.signoff.verifiedAt) :
-        item.state === "stale" ? (item.reason === "structure_changed" ?
-          "Structure changed since " + when(item.signoff.verifiedAt) :
-          "Verified " + when(item.signoff.verifiedAt) + " · file changed since") :
-        "Not verified yet";
-      names.appendChild(make("small", null, sub));
-      top.appendChild(names);
-      var label = { ok: "Verified", check: "To check", stale: "Re-check" }[item.state];
-      top.appendChild(make("span", "st-tag st-chip-" + (item.state === "ok" ? "ok" :
-        item.state === "stale" ? "attn" : "check"), label));
-      row.appendChild(top);
-      if (item.state !== "ok") {
-        var acts = make("div", "st-acts");
-        var link = make("a", "st-btn", "Open in reader");
-        link.href = readerLink(book, stage);
-        acts.appendChild(link);
-        var mark = make("button", "st-btn st-primary", "Mark verified");
-        mark.type = "button";
-        mark.addEventListener("click", function save() {
-          mark.disabled = true;
-          mark.textContent = "Saving…";
-          sign(book, item).then(function done() {
-            redraw();
-            if (options.onChange) { options.onChange(); }
-          }).catch(function failed() {
-            mark.disabled = false;
-            mark.textContent = "Could not save, try again";
+      var at = item.signoff && when(item.signoff.verifiedAt);
+      var sub = item.state === "ok" ? "Verified " + at :
+        item.state === "stale" ? (item.reason === "marked_error" ? "Error marked " + at :
+          item.reason === "structure_changed" ? "Structure changed since " + at :
+          "File changed since " + at) :
+        "Not checked yet";
+      names.appendChild(make("small", item.state === "stale" ? "st-attn-text" : null, sub));
+      row.appendChild(names);
+      var link = make("a", "st-mini", "Open");
+      link.href = readerLink(book, stage);
+      link.setAttribute("aria-label", "Open " + item.label + " in reader");
+      row.appendChild(link);
+      [["ok", "✓", "Mark " + item.label + " verified"], ["error", "✗", "Mark " + item.label + " as error"]]
+        .forEach(function each(def) {
+          var on = def[0] === "ok" ? item.state === "ok" :
+            item.state === "stale" && item.reason === "marked_error";
+          var mark = make("button", "st-mark st-mark-" + def[0] + (on ? " st-on" : ""), def[1]);
+          mark.type = "button";
+          mark.setAttribute("aria-label", def[2]);
+          mark.setAttribute("aria-pressed", on ? "true" : "false");
+          mark.addEventListener("click", function save() {
+            mark.disabled = true;
+            sign(book, item, def[0]).then(function done() {
+              redraw();
+              if (options.onChange) { options.onChange(); }
+            }).catch(function failed() {
+              mark.disabled = false;
+              mark.title = "Could not save, try again";
+              mark.textContent = "!";
+            });
           });
+          row.appendChild(mark);
         });
-        acts.appendChild(mark);
-        row.appendChild(acts);
-      }
       body.appendChild(row);
     });
     card.appendChild(body);

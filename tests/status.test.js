@@ -50,7 +50,17 @@ test("a changed notes file asks for a re-check of the notes", () => {
   assert.deepEqual(info.headline, { kind: "attn", text: "Re-check notes" });
   assert.equal(info.stages[2].manual, "stale");
   assert.equal(info.stages[0].manual, "ok");
-  assert.ok(status.stepsFor(info.stages[2]).join(" ").includes("Mark verified on the EPUB"));
+  assert.ok(status.stepsFor(info.stages[2]).join(" ").includes("Tap ✓ on the EPUB"));
+});
+
+test("a format marked as an error needs attention until the file changes", () => {
+  const bad = { hash: "n1", basedOn: "s1", result: "error" };
+  assert.deepEqual(status.itemState({ present: true, hash: "n1" }, bad, "s1"),
+    { state: "stale", reason: "marked_error" });
+  assert.deepEqual(status.itemState({ present: true, hash: "n2" }, bad, "s1"),
+    { state: "stale", reason: "hash_changed" });
+  assert.deepEqual(status.itemState({ present: true, hash: "n1" }, { hash: "n1", basedOn: "s1" }, "s1"),
+    { state: "ok" });
 });
 
 test("a missing required file is a problem, an optional one is not", () => {
