@@ -433,11 +433,11 @@
         item.required ? " is missing" : " not added (optional)")));
       body.appendChild(row);
     });
-    body.appendChild(make("h4", "st-sub", stage.items.length > 1 ? "You verified · per format" : "You verified"));
+    body.appendChild(make("h4", "st-sub", "You verified"));
     stage.items.filter(function has(item) { return item.present; }).forEach(function each(item) {
       var row = make("div", "st-item st-item-" + item.state);
       var names = make("span", "st-item-names");
-      names.appendChild(make("strong", null, item.label));
+      names.appendChild(make("span", null, item.label + (item.name ? " (" + item.name + ")" : "")));
       var at = item.signoff && when(item.signoff.verifiedAt);
       var sub = item.state === "ok" ? "Verified " + at :
         item.state === "stale" ? (item.reason === "marked_error" ? "Error marked " + at :
