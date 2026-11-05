@@ -196,7 +196,8 @@ other reader: nothing extra is downloaded for them.
   (for example Safari) must clear its website data once by hand.
 - **Versions loaded:** shows the hub UI version this browser actually received
   (jsDelivr's `x-jsd-version` header), what `@uiVersion` resolves to now (a
-  difference means an older cached copy), and the quiz template tags.
+  difference means an older cached copy), and the quiz template version the hub
+  loaded and the newest release. All come from jsDelivr, never from `subject.json`.
 - **Who is an admin:** a user with a document `admins/<uid>` in Firestore (made
   by hand in the Firebase console). Everyone else never sees the switch.
 - **Where the data is:** Firestore `bookStatus/<book folder>` with `auto`

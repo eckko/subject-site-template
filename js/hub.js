@@ -685,14 +685,22 @@
         }).then(function pick(data) { return data.version || "unknown"; })
           .catch(function none() { return "unknown"; });
       };
-      Promise.all([header(hubUrl), latest("subject-site-template", ui)]).then(function both(got) {
+      var newest = function newest(repo) {
+        return fetch("https://data.jsdelivr.com/v1/packages/gh/eckko/" + repo).then(function got(reply) {
+          return reply.json();
+        }).then(function pick(data) {
+          return (data.versions && data.versions[0] && data.versions[0].version) || "unknown";
+        }).catch(function none() { return "unknown"; });
+      };
+      Promise.all([header(hubUrl), latest("subject-site-template", ui),
+        header(QUIZ_CDN + "js/unlock.js"), newest("recall-quiz-site-template")]).then(function both(got) {
         var note = got[0] !== "unknown" && got[1] !== "unknown" && got[0] !== got[1] ?
           " (older copy cached, use Clear cache)" : "";
         versions = [
           ["Subject UI (hub)", got[0] + note],
           ["Subject UI latest on @" + ui, got[1]],
-          ["Quiz template (hub)", QUIZ_TEMPLATE_TAG],
-          ["Quiz template (books)", siteInfo.template || "unknown"],
+          ["Quiz template (hub)", got[2]],
+          ["Quiz template latest", got[3]],
         ];
         rows(versions);
       });
