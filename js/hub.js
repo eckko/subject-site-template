@@ -683,6 +683,35 @@
     }
 
     /**
+     * The newest release of this UI on GitHub that fits uiVersion ("3" or
+     * "3.0" or exact). jsDelivr can lag behind a new release for a while, and
+     * asking it for the exact tag once makes it fetch the release.
+     * @returns {Promise<string>} the version, or "" when unknown
+     */
+    function newestRelease() {
+      return fetch("https://api.github.com/repos/eckko/subject-site-template/tags?per_page=100")
+        .then(function json(reply) { return reply.json(); })
+        .then(function pick(tags) {
+          var spec = siteInfo.ui;
+          var best = "";
+          var parts = function parts(v) { return v.split(".").map(Number); };
+          var newer = function newer(a, b) {
+            var x = parts(a);
+            var y = parts(b);
+            for (var i = 0; i < 3; i += 1) { if (x[i] !== y[i]) { return x[i] > y[i]; } }
+            return false;
+          };
+          tags.forEach(function each(tag) {
+            var name = tag.name;
+            if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(name)) { return; }
+            if (name !== spec && name.indexOf(spec + ".") !== 0) { return; }
+            if (!best || newer(name, best)) { best = name; }
+          });
+          return best;
+        }).catch(function none() { return ""; });
+    }
+
+    /**
      * Purge jsDelivr, refresh this browser's saved copy of each file, drop
      * any Cache Storage / service worker, then reload.
      * @param {function(string): void} say  shows progress on the button
@@ -690,10 +719,17 @@
     function clearCaches(say) {
       var urls = cdnFiles();
       var quiet = function quiet() { return null; };
-      say("Asking jsDelivr…");
-      Promise.all(urls.map(function purge(url) {
-        return fetch(url.replace("://cdn.", "://purge."), { mode: "no-cors" }).catch(quiet);
-      })).then(function wait() {
+      say("Looking for the newest release…");
+      newestRelease().then(function warm(version) {
+        /* One request for the exact release makes jsDelivr pick it up. */
+        if (!version) { return null; }
+        return fetch(JSDELIVR + "subject-site-template@" + version + "/js/hub.js").catch(quiet);
+      }).then(function purgeAll() {
+        say("Asking jsDelivr…");
+        return Promise.all(urls.map(function purge(url) {
+          return fetch(url.replace("://cdn.", "://purge."), { mode: "no-cors" }).catch(quiet);
+        }));
+      }).then(function wait() {
         say("Refreshing this browser…");
         return new Promise(function later(done) { setTimeout(done, 2500); });
       }).then(function again() {
@@ -755,12 +791,14 @@
         }).catch(function none() { return "unknown"; });
       };
       Promise.all([header(hubUrl), latest("subject-site-template", ui),
-        header(QUIZ_CDN + "js/unlock.js"), newest("recall-quiz-site-template")]).then(function both(got) {
+        header(QUIZ_CDN + "js/unlock.js"), newest("recall-quiz-site-template"),
+        newestRelease()]).then(function both(got) {
         var note = got[0] !== "unknown" && got[1] !== "unknown" && got[0] !== got[1] ?
           " (older copy cached, use Clear cache)" : "";
         versions = [
           ["Subject UI (hub)", got[0] + note],
-          ["Subject UI latest on @" + ui, got[1]],
+          ["Subject UI latest on @" + ui, got[1] + (got[4] && got[4] !== got[1] ?
+            " (GitHub has " + got[4] + ", use Clear cache)" : "")],
           ["Quiz template (hub)", got[2]],
           ["Quiz template latest", got[3]],
         ];
